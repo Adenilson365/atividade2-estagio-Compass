@@ -11,15 +11,24 @@
  - Itens 1 e 2 - Automatizado pelo script env_install.sh
  - Item 3 : Necessário realizar manualmente na primeira instalação, ou na alteração das configurações.
  - [Montagem EFS](#montagem-efs)
- - [Instalação Docker](#instala%C3%A7%C3%A3o-do-docker-e-run-do-cont%C3%AAiner)
+ - [Instalação Docker, Docker compose e RUN da Aplicação](#instala%C3%A7%C3%A3o-do-docker-docker-compose-e-run-do-cont%C3%AAiner)
  - [Configuração Wordpress](#configura%C3%A7%C3%A3o-wordpress)
 
 ### Montagem EFS
-- Crie a pasta para o ponto de montagem:
+- Crie um diretório para organizar os artefatos gerados pelo script
+  ```
+  dir_install=/home/ec2-user/install
+  mkdir $dir_install
+  ```
+- Dentro do EFS haverá duas pastas /site e /compose
+  - /site : contém os arquivos do Wordpress, e será mapeada para dentro do contêiner
+  - /compose : contém o arquivo docker-compose.yml
+    
+- Crie a pasta para o ponto de montagem do efs:
   ```
   sudo mkdir /efs
   ```
-- Capture o parâmetro do Parameter do Store 
+- Capture o parâmetro do efs do Parameter do Store 
   ```
    efs_dns=$(aws ssm get-parameter --name "parametro_ativ_2_efs" --query "Parameter.Value" --output text --region us-east-1)
   ```
@@ -39,7 +48,7 @@
   ```
   sudo chmod o-w /etc/fstab
   ```
-### Instalação do Docker e RUN do contêiner
+### Instalação do Docker, Docker Compose e RUN do contêiner
 - Instale apartir do gerenciador de pacotes (nesse caso yum) 
   ```
   sudo yum install docker -y
@@ -48,6 +57,27 @@
   ```
   sudo systemctl start docker
   sudo systemctl enable docker
+  ```
+- Adicione o usuário ec2-user ao grupo docker e atualize o grupo
+  ```
+  sudo usermod -aG docker ec2-user
+  newgrp docker
+  ```
+- Crie o diretório cli-plugins  [Seguir Documentação Docker](https://docs.docker.com/compose/install/linux/) 
+  ```
+  sudo mkdir -p /usr/local/lib/docker/cli-plugins
+  ```
+- Baixe o binário do plugin compose
+  ```
+  sudo curl -SL https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+  ```
+- Dê permissão de execução
+  ```
+  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+  ```
+- Dê restart no docker
+  ```
+  systemctl restart docker
   ```
 - Capture os parâmetros do banco de dados e atribua a uma variável (nesse caso foi armazenado como stringlist no Parameter Store)
   ```
@@ -59,18 +89,24 @@
   db_user=$(echo $access | cut -d"," -f2)
   db_pass=$(echo $access | cut -d"," -f3)
   db_name=$(echo $access | cut -d"," -f4)
-  ``` 
-- Suba o de contêiner Wordpress com docker run
   ```
-  sudo docker run -dit --name wp -e WORDPRESS_DB_HOST=$db_host -e WORDPRESS_DB_USER=$db_user -e WORDPRESS_DB_PASSWORD=$db_pass -e WORDPRESS_DB_NAME=$db_name -p 80:80 -v /efs/site:/var/www/html wordpress
+- Crie o arquivo .env na pasta de instalação criada no início
   ```
-  - tag -dit : executa o contêiner em segundo plano, iterativo, e com terminal
-  - tag -e : insere as variáveis de ambientes necessárias ao contêiner de wordpress
-  - tag -p : determina a porta que vai expor a aplicação dessa forma,  portaHost:portaContêiner
-  - tag -v : Mapeia um volume para dentro do contêiner dessa forma, caminhoHost:caminhoContêiner
-    - Permite que os arquivos servidos pelo contêiner sejam armazenados separadamente ao contêiner,
-      permitindo serem persistidos e compartilhados por outros contêiners.
-      
+  echo "db_host=$db_host" >> $dir_install/.env
+  echo "db_user=$db_user" >> $dir_install/.env
+  echo "db_pass=$db_pass" >> $dir_install/.env
+  echo "db_name=$db_name" >> $dir_install/.env
+  ```
+- Copie o docker-compose.yml para a pasta de instalação
+  ```
+  cp /efs/compose/docker-compose.yml $dir_install
+  ```
+- Navegue para a pasta, e execute o docker-compose
+  ```
+  cd $dir_install
+  docker compose up 
+  ```
+### Caso não tenha subido a aplicação, verifique os logs que devem estar na mesma pasta de instalação.      
  
 ### Configuração Wordpress
   - Na primeira execução é necessário realizar a configuração do Wordpress
