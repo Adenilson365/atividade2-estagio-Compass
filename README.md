@@ -13,6 +13,7 @@
  - [Montagem EFS](#montagem-efs)
  - [Instalação Docker, Docker compose e RUN da Aplicação](#instala%C3%A7%C3%A3o-do-docker-docker-compose-e-run-do-cont%C3%AAiner)
  - [Configuração Wordpress](#configura%C3%A7%C3%A3o-wordpress)
+ - [Visão geral dos Recursos AWS](#recursos-aws)
 
 ### Montagem EFS
 - Crie um diretório para organizar os artefatos gerados pelo script
@@ -128,3 +129,21 @@
      - Configuração do usuário admin
        - No primeiro acesso, se as configurações até aqui estiverem corretas teremos:
           - Uma página para informar e-mail, usuário e senha forte para o painel de admin do Wordpress.
+        
+  ### Recursos AWS 
+  
+- Foi usado uma VPC com duas subnets públicas e resolução de DNS (Nenhum dos recursos recebe acesso público de fora da AWS, exceto Loab Balancer).
+- Um RDS com database MYSQL 
+- Um EFS regional com ponto de montagem via DNS
+- Modelo de execução com os parametros da EC2
+  - Contêm todas as configurações da EC2 como: Security Group, Subnet, Key Pair, Roles, user_data.
+- Auto Scaling associado ao load balancer
+  - O Auto Scaling vai subir as EC2 a partir do modelo de execução, e vai
+    realizar a troca de EC2 baseado no health check do Load Balancer.
+- Foi usado o Parameter Store (do Systems Manager) para armazenar os parametros do Banco de Dados e do EFS.
+  - O modelo de execução deve conter nas opções avançadas a Role que será associada a EC2 e que vai permitir que 
+    a EC2 faça consultas ao Parameter Store.
+- Os Security Groups devem estar abertos, apenas para os Security Groups dos recursos com os quais precisa se comunicar.
+  - No caso da EC2 sua regra de **HTTP** deve estar recebendo requisições apenas do load balancer. 
+      
+        
