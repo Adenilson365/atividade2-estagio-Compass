@@ -15,6 +15,11 @@
  - [Configuração Wordpress](#configura%C3%A7%C3%A3o-wordpress)
  - [Visão geral dos Recursos AWS](#recursos-aws)
 
+# 
+### Diagrama
+![Diagrama da Arquitetura](./assets/Diagrama_ativ02.png)
+#
+
 ### Montagem EFS
 - Crie um diretório para organizar os artefatos gerados pelo script
   ```
