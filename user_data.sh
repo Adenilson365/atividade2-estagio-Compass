@@ -1,4 +1,5 @@
 #!/bin/bash
+#!/bin/bash
 set -o history
 
 dir_install=/home/ec2-user/install
@@ -46,13 +47,13 @@ log $?
 sudo mkdir /efs
 log $?
 
-efs_dns=$(aws ssm get-parameter --name "parametro_ativ_2_efs" --query "Parameter.Value" --output text --region us-east-1)
+efs_dns=$(aws ssm get-parameter --name "dns_efs_parameter" --query "Parameter.Value" --output text --region us-east-1)
 log $?
 
 sudo chmod o+w /etc/fstab
 log $?
 
-echo "$efs_dns /efs nfs4 nofail,_netdev,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport   0 0 " >> /etc/fstab
+echo "$efs_dns:/ /efs nfs4 nofail,_netdev,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport   0 0 " >> /etc/fstab
 log $?
 
 sudo mount -a
@@ -62,16 +63,17 @@ sudo chmod o-w /etc/fstab
 log $?
 
 #Preparação dos parametros para subir o container
-access=$(aws ssm get-parameter --name "parametro_ativ_2_db" --query "Parameter.Value" --output text --region us-east-1)
+alb_dns=$(aws ssm get-parameter --name "alb_dns" --query "Parameter.Value" --output text --region us-east-1)
+rds_parameter=$(aws ssm get-parameter --name "rds_parameter" --query "Parameter.Value" --output text --region us-east-1)
 log $?
 
-db_host=$(echo $access | cut -d"," -f1) 
+db_host=$(echo $rds_parameter | cut -d"," -f1) 
 log $?
-db_user=$(echo $access | cut -d"," -f2)
+db_user=$(echo $rds_parameter | cut -d"," -f2)
 log $?
-db_pass=$(echo $access | cut -d"," -f3)
+db_pass=$(echo $rds_parameter | cut -d"," -f3)
 log $?
-db_name=$(echo $access | cut -d"," -f4)
+db_name=$(echo $rds_parameter | cut -d"," -f4)
 log $?
 
 echo "db_host=$db_host" >> $dir_install/.env
@@ -82,8 +84,30 @@ echo "db_pass=$db_pass" >> $dir_install/.env
 log $?
 echo "db_name=$db_name" >> $dir_install/.env
 log $?
+echo "alb_dns=$alb_dns" >> $dir_install/.env
+log $?
 
-cp /efs/compose/docker-compose.yml $dir_install
+cat << EOF >> $dir_install/docker-compose.yml
+
+services:
+  wordpress:
+    image: wordpress
+    container_name: wp
+    ports:
+      - "80:80"
+    volumes:
+      - /efs/site:/var/www/html
+    environment:
+      WORDPRESS_DB_HOST: ${db_host}
+      WORDPRESS_DB_USER: ${db_user}
+      WORDPRESS_DB_PASSWORD: ${db_pass}
+      WORDPRESS_DB_NAME: ${db_name}
+      WORDPRESS_CONFIG_EXTRA: |
+        define ("WP_HOME", "http://${alb_dns}");
+        define ("WP_SITEURL", "http://${alb_dns}");
+    restart: unless-stopped  
+EOF
+
 log $?
 
 cd $dir_install
